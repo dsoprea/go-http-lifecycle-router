@@ -20,7 +20,7 @@ type testLifecycleHandler struct {
 }
 
 func newTestLifecycleHandler() *testLifecycleHandler {
-    return &testLifecycleHandler{}
+    return new(testLifecycleHandler)
 }
 
 func (tlh *testLifecycleHandler) BeforeHandle(r *http.Request) error {
