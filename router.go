@@ -49,7 +49,10 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpHandler, methods
         lr.lh.AfterHandle(r)
     }
 
-    lr.Router.HandleFunc(urlPath, f).Methods(methods...)
+    r := lr.Router.HandleFunc(urlPath, f)
+    if len(methods) > 0 {
+        r.Methods(methods...)
+    }
 }
 
 // AddUiHandler registers a path that will produce browser content (e.g. HTML).
@@ -64,5 +67,8 @@ func (lr *LifecycleRouter) AddUiHandler(urlPath string, hh httpHandler, methods 
         lr.lh.AfterHandle(r)
     }
 
-    lr.Router.HandleFunc(urlPath, f).Methods(methods...)
+    r := lr.Router.HandleFunc(urlPath, f)
+    if len(methods) > 0 {
+        r.Methods(methods...)
+    }
 }
