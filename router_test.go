@@ -3,6 +3,7 @@ package ghlr
 import (
     "testing"
     "bytes"
+
     "net/http"
     "net/http/httptest"
 )
@@ -65,8 +66,12 @@ func Test_ApiHandler(t *testing.T) {
 
 
     isHandled := false
-    f := func(w http.ResponseWriter, r *http.Request) {
+    f := func(w http.ResponseWriter, r *http.Request) map[string]interface{} {
         isHandled = true
+
+        return map[string]interface{} {
+            "aa": 123,
+        }
     }
 
     lr.AddApiHandler("/", f, "GET")
@@ -100,7 +105,9 @@ func Test_ApiHandler(t *testing.T) {
     b.ReadFrom(response.Body)
     actualBody := b.String()
 
-    expectedBody := ""
+    expectedBody := `{
+  "aa": 123
+}`
 
     if actualBody != expectedBody {
         t.Fatalf("handler returned unexpected body: [%v] != [%v]",
