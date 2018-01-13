@@ -8,6 +8,10 @@ import (
     "github.com/dsoprea/go-logging"
 )
 
+var (
+    routerLogger = log.NewLogger("ghlr.router")
+)
+
 type LifecycleHandler interface {
     BeforeHandle(r *http.Request) error
     AfterHandle(r *http.Request) error
@@ -40,9 +44,45 @@ func NewLifecycleRouter(lh LifecycleHandler) *LifecycleRouter {
     return lr
 }
 
+
+type HttpErrorMessage interface {
+    HttpErrorMessage() string
+}
+
+type HttpErrorCode interface {
+    HttpErrorCode() int
+}
+
 // AddApiHandler registers a path that will produce data.
 func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, methods ...string) {
     f := func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            err := recover()
+            if err == nil {
+                return
+            }
+
+            routerLogger.Errorf(nil, err, "There was a problem while handling the request.")
+
+            hec, ok := err.(HttpErrorCode)
+            if ok == true {
+                code := hec.HttpErrorCode()
+                w.WriteHeader(code)
+            } else {
+                w.WriteHeader(http.StatusInternalServerError)
+            }
+
+            hem, ok := err.(HttpErrorMessage)
+            if ok == true {
+                hem = hem
+
+                message := hem.HttpErrorMessage()
+                w.Write([]byte(message))
+            } else {
+                w.Write([]byte("There was a problem while handling the request."))
+            }
+        }()
+
         lr.lh.BeforeHandle(r)
         lr.lh.BeforeApiHandle(r)
 
@@ -55,7 +95,6 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
         b, err := json.MarshalIndent(output, "", "  ")
         log.PanicIf(err)
 
-        w.WriteHeader(http.StatusOK)
         w.Write(b)
 
         lr.lh.AfterApiHandle(r)
@@ -77,8 +116,6 @@ func (lr *LifecycleRouter) AddUiHandler(urlPath string, hh httpUiHandler, method
         w.Header().Set("Content-Type", "text/html")
 
         hh(w, r)
-
-        w.WriteHeader(http.StatusOK)
 
         lr.lh.AfterUiHandle(r)
         lr.lh.AfterHandle(r)

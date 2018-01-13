@@ -3,6 +3,7 @@ package ghlr
 import (
     "testing"
     "bytes"
+    // "errors"
 
     "net/http"
     "net/http/httptest"
@@ -144,6 +145,71 @@ func Test_ApiHandler(t *testing.T) {
         t.Errorf("handler did not hit afterHandle trigger")
     }
 
+}
+
+
+type testHttpError struct {
+
+}
+
+func (the testHttpError) Error() string {
+    return "unmanaged error message"
+}
+
+func (the testHttpError) HttpErrorMessage() string {
+    return "managed error message"
+}
+
+func (the testHttpError) HttpErrorCode() int {
+    return 555
+}
+
+func Test_ApiHandler_Error(t *testing.T) {
+    tlh := newTestLifecycleHandler()
+    lr := NewLifecycleRouter(tlh)
+
+
+    f := func(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+        panic(testHttpError{})
+    }
+
+    lr.AddApiHandler("/", f, "GET")
+
+
+    s := httptest.NewServer(lr.Router)
+    testUrl := s.URL + "/"
+
+    r, err := http.NewRequest("GET", testUrl, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+
+
+    response, err := http.DefaultClient.Do(r)
+    if err != nil {
+        t.Fatal(err)
+    }
+
+
+    actualCode := response.StatusCode
+    expectedCode := 555
+
+    if actualCode != expectedCode {
+        t.Fatalf("handler returned unexpected code: (%d) != (%d)",
+                 actualCode, expectedCode)
+    }
+
+
+    b := new(bytes.Buffer)
+    b.ReadFrom(response.Body)
+    actualBody := b.String()
+
+    expectedBody := "managed error message"
+
+    if actualBody != expectedBody {
+        t.Fatalf("failed handler returned unexpected body: [%v] != [%v]",
+                 actualBody, expectedBody)
+    }
 }
 
 func Test_UiHandler(t *testing.T) {
