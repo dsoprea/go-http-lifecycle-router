@@ -81,6 +81,8 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
             } else {
                 w.Write([]byte("There was a problem while handling the request."))
             }
+
+            w.Write([]byte { '\n' })
         }()
 
         lr.lh.BeforeHandle(r)
