@@ -96,6 +96,7 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
         log.PanicIf(err)
 
         w.Write(b)
+        w.Write([]byte { '\n' })
 
         lr.lh.AfterApiHandle(r)
         lr.lh.AfterHandle(r)
