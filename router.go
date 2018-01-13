@@ -6,6 +6,7 @@ import (
 
     "github.com/gorilla/mux"
     "github.com/dsoprea/go-logging"
+    "github.com/go-errors/errors"
 )
 
 var (
@@ -64,7 +65,20 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
 
             routerLogger.Errorf(nil, err, "There was a problem while handling the request.")
 
-            hec, ok := err.(HttpErrorCode)
+            // If we have a stackframe-wrapped error, get the original error
+            // out of it. It will mask any managed errors that we might need to
+            // display back to the user.
+            errError, ok := err.(*errors.Error)
+            var errHtml error
+            if ok == true {
+                errHtml = errError.Err
+            } else {
+                errHtml = err.(error)
+            }
+
+            // Determine if there's a custom code to return.
+
+            hec, ok := errHtml.(HttpErrorCode)
             if ok == true {
                 code := hec.HttpErrorCode()
                 w.WriteHeader(code)
@@ -72,7 +86,9 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
                 w.WriteHeader(http.StatusInternalServerError)
             }
 
-            hem, ok := err.(HttpErrorMessage)
+            // Determine if there's a custom message to return.
+
+            hem, ok := errHtml.(HttpErrorMessage)
             if ok == true {
                 hem = hem
 
