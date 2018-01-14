@@ -2,12 +2,10 @@ package ghlr
 
 import (
     "testing"
-    "bytes"
     "reflect"
 
     "encoding/json"
     "net/http"
-    "net/http/httptest"
 
     "github.com/dsoprea/go-logging"
 )
@@ -166,40 +164,23 @@ func Test_ApiHandler_Error(t *testing.T) {
 
     lr.AddApiHandler("/", f, []string { "GET" }, false)
 
-
-    s := httptest.NewServer(lr.Router)
-    testUrl := s.URL + "/"
-
-    r, err := http.NewRequest("GET", testUrl, nil)
-    if err != nil {
-        t.Fatal(err)
-    }
+    code, body, err := DoRequest(lr.Router, "GET", "", "")
+    log.PanicIf(err)
 
 
-    response, err := http.DefaultClient.Do(r)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-
-    actualCode := response.StatusCode
     expectedCode := 555
 
-    if actualCode != expectedCode {
+    if code != expectedCode {
         t.Fatalf("handler returned unexpected code: (%d) != (%d)",
-                 actualCode, expectedCode)
+                 code, expectedCode)
     }
 
-
-    b := new(bytes.Buffer)
-    b.ReadFrom(response.Body)
-    actualBody := b.String()
 
     expectedBody := "managed error message\n"
 
-    if actualBody != expectedBody {
+    if body != expectedBody {
         t.Fatalf("failed handler returned unexpected body: [%v] != [%v]",
-                 actualBody, expectedBody)
+                 body, expectedBody)
     }
 }
 
@@ -215,40 +196,22 @@ func Test_UiHandler(t *testing.T) {
 
     lr.AddUiHandler("/", f, "GET")
 
+    code, body, err := DoRequest(lr.Router, "GET", "", "")
+    log.PanicIf(err)
 
-    s := httptest.NewServer(lr.Router)
-    testUrl := s.URL + "/"
-
-    r, err := http.NewRequest("GET", testUrl, nil)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-
-    response, err := http.DefaultClient.Do(r)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-
-    actualCode := response.StatusCode
     expectedCode := http.StatusOK
 
-    if actualCode != expectedCode {
+    if code != expectedCode {
         t.Fatalf("handler returned unexpected code: (%d) != (%d)",
-                 actualCode, expectedCode)
+                 code, expectedCode)
     }
 
-
-    b := new(bytes.Buffer)
-    b.ReadFrom(response.Body)
-    actualBody := b.String()
 
     expectedBody := ""
 
-    if actualBody != expectedBody {
+    if body != expectedBody {
         t.Fatalf("handler returned unexpected body: [%v] != [%v]",
-                 actualBody, expectedBody)
+                 body, expectedBody)
     }
 
 
