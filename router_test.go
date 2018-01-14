@@ -194,7 +194,7 @@ func Test_UiHandler(t *testing.T) {
         isHandled = true
     }
 
-    lr.AddUiHandler("/", f, "GET")
+    lr.AddUiHandler("/", f)
 
     code, body, err := DoRequest(lr.Router, "GET", "", "")
     log.PanicIf(err)
