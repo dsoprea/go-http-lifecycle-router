@@ -3,10 +3,13 @@ package ghlr
 import (
     "testing"
     "bytes"
-    // "errors"
+    "reflect"
 
+    "encoding/json"
     "net/http"
     "net/http/httptest"
+
+    "github.com/dsoprea/go-logging"
 )
 
 
@@ -67,7 +70,7 @@ func Test_ApiHandler(t *testing.T) {
 
 
     isHandled := false
-    f := func(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+    f := func(w http.ResponseWriter, r *http.Request, d map[string]interface{}) map[string]interface{} {
         isHandled = true
 
         return map[string]interface{} {
@@ -75,44 +78,33 @@ func Test_ApiHandler(t *testing.T) {
         }
     }
 
-    lr.AddApiHandler("/", f, "GET")
+    lr.AddApiHandler("/", f, []string { "GET" }, false)
 
 
-    s := httptest.NewServer(lr.Router)
-    testUrl := s.URL + "/"
+    code, body, err := DoRequest(lr.Router, "GET", "", "")
+    log.PanicIf(err)
 
-    r, err := http.NewRequest("GET", testUrl, nil)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-
-    response, err := http.DefaultClient.Do(r)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-
-    actualCode := response.StatusCode
     expectedCode := http.StatusOK
 
-    if actualCode != expectedCode {
+    if code != expectedCode {
         t.Fatalf("handler returned unexpected code: (%d) != (%d)",
-                 actualCode, expectedCode)
+                 code, expectedCode)
     }
 
 
-    b := new(bytes.Buffer)
-    b.ReadFrom(response.Body)
-    actualBody := b.String()
+    decoded := map[string]interface{} {}
+    err = json.Unmarshal([]byte(body), &decoded)
+    log.PanicIf(err)
 
-    expectedBody := `{
-  "aa": 123
-}`
+    // expected has a float because apparently all numbers decode to float
+    // (the safest option for the parser).
+    expected := map[string]interface{} {
+        "aa": 123.0,
+    }
 
-    if actualBody != expectedBody {
+    if reflect.DeepEqual(decoded, expected) != true {
         t.Fatalf("handler returned unexpected body: [%v] != [%v]",
-                 actualBody, expectedBody)
+                 decoded, expected)
     }
 
 
@@ -144,7 +136,6 @@ func Test_ApiHandler(t *testing.T) {
     if tlh.afterHandle != true {
         t.Errorf("handler did not hit afterHandle trigger")
     }
-
 }
 
 
@@ -169,11 +160,11 @@ func Test_ApiHandler_Error(t *testing.T) {
     lr := NewLifecycleRouter(tlh)
 
 
-    f := func(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+    f := func(w http.ResponseWriter, r *http.Request, d map[string]interface{}) map[string]interface{} {
         panic(testHttpError{})
     }
 
-    lr.AddApiHandler("/", f, "GET")
+    lr.AddApiHandler("/", f, []string { "GET" }, false)
 
 
     s := httptest.NewServer(lr.Router)
@@ -204,7 +195,7 @@ func Test_ApiHandler_Error(t *testing.T) {
     b.ReadFrom(response.Body)
     actualBody := b.String()
 
-    expectedBody := "managed error message"
+    expectedBody := "managed error message\n"
 
     if actualBody != expectedBody {
         t.Fatalf("failed handler returned unexpected body: [%v] != [%v]",
@@ -290,4 +281,113 @@ func Test_UiHandler(t *testing.T) {
         t.Errorf("handler did not hit afterHandle trigger")
     }
 
+}
+
+func Test_ApiHandler_DecodeAndPass_WantDecode(t *testing.T) {
+    tlh := newTestLifecycleHandler()
+    lr := NewLifecycleRouter(tlh)
+
+    isHandled := false
+    f := func(w http.ResponseWriter, r *http.Request, incoming map[string]interface{}) map[string]interface{} {
+        isHandled = true
+
+        expected := map[string]interface{}{
+            "incoming-data": 123.0,
+        }
+
+        if reflect.DeepEqual(incoming, expected) != true {
+            t.Fatalf("handler received unexpected request body: [%v] != [%v]",
+                     incoming, expected)
+        }
+
+        return map[string]interface{} {
+            "aa": 123,
+        }
+    }
+
+    lr.AddApiHandler("/", f, []string { "GET" }, true)
+
+
+    code, body, err := DoRequest(lr.Router, "GET", "", `{ "incoming-data": 123 }`)
+    log.PanicIf(err)
+
+    expectedCode := http.StatusOK
+
+    if code != expectedCode {
+        t.Fatalf("handler returned unexpected code: (%d) != (%d)",
+                 code, expectedCode)
+    }
+
+
+    decoded := map[string]interface{} {}
+    err = json.Unmarshal([]byte(body), &decoded)
+    log.PanicIf(err)
+
+    // expected has a float because apparently all numbers decode to float
+    // (the safest option for the parser).
+    expected := map[string]interface{} {
+        "aa": 123.0,
+    }
+
+    if reflect.DeepEqual(decoded, expected) != true {
+        t.Fatalf("handler returned unexpected body: [%v] != [%v]",
+                 decoded, expected)
+    }
+
+
+    if isHandled != true {
+        t.Fatalf("handler was not hit")
+    }
+}
+
+func Test_ApiHandler_DecodeAndPass_NoDecode(t *testing.T) {
+    tlh := newTestLifecycleHandler()
+    lr := NewLifecycleRouter(tlh)
+
+    isHandled := false
+    f := func(w http.ResponseWriter, r *http.Request, incoming map[string]interface{}) map[string]interface{} {
+        isHandled = true
+
+        if incoming != nil {
+            t.Fatalf("Did not expect incoming request-body to be decoded.")
+        }
+
+        return map[string]interface{} {
+            "aa": 123,
+        }
+    }
+
+    lr.AddApiHandler("/", f, []string { "GET" }, false)
+
+
+    code, body, err := DoRequest(lr.Router, "GET", "", `{ "incoming-data": 123 }`)
+    log.PanicIf(err)
+
+    expectedCode := http.StatusOK
+
+    if code != expectedCode {
+        t.Fatalf("handler returned unexpected code: (%d) != (%d)",
+                 code, expectedCode)
+    }
+
+
+    decoded := map[string]interface{} {}
+    err = json.Unmarshal([]byte(body), &decoded)
+    log.PanicIf(err)
+
+    // expected has a float because apparently all numbers decode to float
+    // (the safest option for the parser).
+    expected := map[string]interface{} {
+        "aa": 123.0,
+    }
+
+    if reflect.DeepEqual(decoded, expected) != true {
+        t.Fatalf("handler returned unexpected body: [%v] != [%v]",
+                 decoded, expected)
+    }
+
+
+    if isHandled != true {
+        t.Fatalf("handler was not hit")
+    }
 }

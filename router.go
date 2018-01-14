@@ -1,6 +1,8 @@
 package ghlr
 
 import (
+    "strings"
+
     "net/http"
     "encoding/json"
 
@@ -25,7 +27,7 @@ type LifecycleHandler interface {
 }
 
 type httpUiHandler func(w http.ResponseWriter, r *http.Request)
-type httpApiHandler func(w http.ResponseWriter, r *http.Request) map[string]interface{}
+type httpApiHandler func(w http.ResponseWriter, r *http.Request, data map[string]interface{}) map[string]interface{}
 
 type LifecycleRouter struct {
     Router *mux.Router
@@ -55,7 +57,7 @@ type HttpErrorCode interface {
 }
 
 // AddApiHandler registers a path that will produce data.
-func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, methods ...string) {
+func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, methods []string, decodeAndPassBody bool) {
     f := func(w http.ResponseWriter, r *http.Request) {
         defer func() {
             err := recover()
@@ -101,6 +103,23 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
             w.Write([]byte { '\n' })
         }()
 
+        var d map[string]interface{}
+        if decodeAndPassBody == true {
+            d = map[string]interface{} {}
+
+            ct := r.Header.Get("Content-Type")
+            ct = strings.ToLower(ct)
+            if ct != "" && ct != "application/json" {
+                log.Panicf("content-type not supported")
+            }
+
+            j := json.NewDecoder(r.Body)
+            defer r.Body.Close()
+
+            err := j.Decode(&d)
+            log.PanicIf(err)
+        }
+
         lr.lh.BeforeHandle(r)
         lr.lh.BeforeApiHandle(r)
 
@@ -108,7 +127,7 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
 
         w.Header().Set("Content-Type", "application/json")
 
-        output := hh(w, r)
+        output := hh(w, r, d)
 
         b, err := json.MarshalIndent(output, "", "  ")
         log.PanicIf(err)
