@@ -81,11 +81,9 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
             // Determine if there's a custom code to return.
 
             hec, ok := errHtml.(HttpErrorCode)
+            code := http.StatusInternalServerError
             if ok == true {
-                code := hec.HttpErrorCode()
-                w.WriteHeader(code)
-            } else {
-                w.WriteHeader(http.StatusInternalServerError)
+                code = hec.HttpErrorCode()
             }
 
             // Determine if there's a custom message to return.
@@ -95,12 +93,11 @@ func (lr *LifecycleRouter) AddApiHandler(urlPath string, hh httpApiHandler, meth
                 hem = hem
 
                 message := hem.HttpErrorMessage()
-                w.Write([]byte(message))
+                http.Error(w, message, code)
             } else {
                 w.Write([]byte("There was a problem while handling the request."))
+                w.Write([]byte { '\n' })
             }
-
-            w.Write([]byte { '\n' })
         }()
 
         var d map[string]interface{}
